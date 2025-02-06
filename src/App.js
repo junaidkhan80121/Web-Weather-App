@@ -106,15 +106,6 @@ function App() {
           />
           <br />
           <br />
-          <Backdrop
-            sx={{ color: "#fff" }}
-            open={open}
-            onClick={() => {
-              setopen(false);
-            }}
-          >
-            <CircularProgress color="inherit" />
-          </Backdrop>
           <Button
             //fullWidth={true}
             color="primary"
@@ -156,6 +147,15 @@ function App() {
           <DialogActions><Button variant="contained" onClick={()=>setErrorDialog(false)}>Close</Button></DialogActions>
         </Dialog>
       </Card>
+            <Backdrop
+            sx={{ color: "#fff" }}
+            open={open}
+            onClick={() => {
+              setopen(false);
+            }}
+          >
+            <CircularProgress color="inherit" />
+          </Backdrop>
     </Container>
   );
 }
