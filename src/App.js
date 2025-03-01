@@ -119,9 +119,7 @@ function App() {
         </Box>
         <br />
         <br />
-              <Box>
-              <Typography variant="h3">{city}<Typography>
-              </Box>
+              
         <Box>
           <img
             className="image"
