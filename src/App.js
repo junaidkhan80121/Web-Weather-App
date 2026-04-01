@@ -1,89 +1,89 @@
 import React, { useEffect, useState, useCallback } from "react";
-import {
-  TextField,
-  Button,
-  Box,
-  Backdrop,
-  CircularProgress,
-  DialogContent,
-  Typography,
-  Dialog,
-  DialogActions,
-  ToggleButton,
-  ToggleButtonGroup,
-  IconButton,
-  InputAdornment,
-} from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import ThermostatAutoIcon from "@mui/icons-material/ThermostatAuto";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
-import WaterDropIcon from "@mui/icons-material/WaterDrop";
-import AirIcon from "@mui/icons-material/Air";
-import WbSunnyIcon from "@mui/icons-material/WbSunny";
-import NightsStayIcon from "@mui/icons-material/NightsStay";
 import axios from "axios";
 import BackgroundWrapper from "./BackgroundWrapper";
 import "./App.css";
 
-/* ───── Open-Meteo helper (free, no API key) ───── */
+/* ───── Open-Meteo: hourly + daily forecast (free, no key) ───── */
 async function fetchForecast(lat, lon) {
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&hourly=temperature_2m,weathercode` +
     `&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,windspeed_10m_max` +
-    `&timezone=auto`;
+    `&timezone=auto&forecast_hours=18`;
   const res = await axios.get(url);
-  return res.data.daily;
+  return res.data;
 }
 
-/* Maps WMO weather codes to friendly labels */
+/* WMO weather code → label */
 function wmoLabel(code) {
   const map = {
-    0: "Clear sky",    1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
-    45: "Fog",         48: "Rime fog",
-    51: "Light drizzle", 53: "Drizzle",  55: "Dense drizzle",
-    61: "Slight rain", 63: "Rain",       65: "Heavy rain",
-    71: "Slight snow", 73: "Snow",       75: "Heavy snow",
-    80: "Rain showers",81: "Rain showers",82: "Heavy showers",
-    95: "Thunderstorm",96: "Thunderstorm + hail", 99: "Thunderstorm + hail",
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Rime fog",
+    51: "Light drizzle", 53: "Drizzle", 55: "Dense drizzle",
+    61: "Slight rain", 63: "Rain", 65: "Heavy rain",
+    71: "Slight snow", 73: "Snow", 75: "Heavy snow",
+    80: "Rain showers", 81: "Showers", 82: "Heavy showers",
+    95: "Thunderstorm", 96: "Thunderstorm + hail", 99: "Severe storm",
   };
   return map[code] || "Unknown";
 }
 
-function wmoIcon(code) {
-  if ([0, 1].includes(code))               return "☀️";
-  if ([2, 3].includes(code))               return "⛅";
-  if ([45, 48].includes(code))             return "🌫️";
-  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return "🌧️";
-  if ([71, 73, 75].includes(code))         return "❄️";
-  if ([95, 96, 99].includes(code))         return "⛈️";
-  return "🌤️";
+/* WMO code → Material Symbol icon name */
+function wmoMaterialIcon(code) {
+  if ([0, 1].includes(code)) return "wb_sunny";
+  if ([2].includes(code)) return "partly_cloudy_day";
+  if ([3].includes(code)) return "cloud";
+  if ([45, 48].includes(code)) return "foggy";
+  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return "rainy";
+  if ([71, 73, 75].includes(code)) return "ac_unit";
+  if ([95, 96, 99].includes(code)) return "thunderstorm";
+  return "cloud";
+}
+
+/* WMO code → accent color class */
+function wmoIconColor(code) {
+  if ([0, 1].includes(code)) return "icon-tertiary";
+  if ([2, 3].includes(code)) return "icon-secondary";
+  if ([45, 48].includes(code)) return "icon-muted";
+  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return "icon-primary";
+  if ([71, 73, 75].includes(code)) return "icon-snow";
+  if ([95, 96, 99].includes(code)) return "icon-error";
+  return "icon-secondary";
+}
+
+/* condition text → Material Symbol icon name */
+function conditionIcon(text) {
+  if (!text) return "cloud";
+  const c = text.toLowerCase();
+  if (c.includes("thunder") || c.includes("storm")) return "thunderstorm";
+  if (c.includes("snow") || c.includes("blizzard") || c.includes("ice")) return "ac_unit";
+  if (c.includes("rain") || c.includes("drizzle") || c.includes("shower")) return "rainy";
+  if (c.includes("fog") || c.includes("mist") || c.includes("haze")) return "foggy";
+  if (c.includes("overcast")) return "cloud";
+  if (c.includes("cloudy") || c.includes("partly")) return "partly_cloudy_day";
+  if (c.includes("clear") || c.includes("sunny")) return "wb_sunny";
+  return "cloud";
 }
 
 /* ───── Main App ───── */
 function App() {
   const [city, setCity] = useState("Kolkata");
   const [inputValue, setInputValue] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [errorOpen, setErrorOpen] = useState(false);
-  const [view, setView] = useState("today"); // "today" | "week"
 
   const [current, setCurrent] = useState({
-    temp_c: "",
-    temp_f: "",
-    condition: "",
-    conditionIcon: "",
-    location: "",
-    humidity: "",
-    wind_kph: "",
-    feelslike_c: "",
-    is_day: 1,
-    lat: null,
-    lon: null,
+    temp_c: "--", temp_f: "--", condition: "", location: "",
+    region: "", country: "", humidity: "--", wind_kph: "--",
+    feelslike_c: "--", is_day: 1, lat: null, lon: null,
+    vis_km: "--", pressure_mb: "--", uv: "--",
+    wind_dir: "", cloud: "--",
   });
 
-  const [forecast, setForecast] = useState([]); // 7-day
+  const [hourly, setHourly] = useState([]);
+  const [forecast, setForecast] = useState([]);
 
-  /* ---- fetch current weather (RapidAPI) ---- */
+  /* ── fetch current weather (RapidAPI) ── */
   const fetchCurrent = useCallback(async (q) => {
     setLoading(true);
     try {
@@ -97,21 +97,17 @@ function App() {
           },
         }
       );
-
       const loc = data.location;
       const cur = data.current;
       setCurrent({
-        temp_c: cur.temp_c,
-        temp_f: cur.temp_f,
+        temp_c: cur.temp_c, temp_f: cur.temp_f,
         condition: cur.condition.text,
-        conditionIcon: cur.condition.icon,
-        location: `${loc.name}, ${loc.region}, ${loc.country}`,
-        humidity: cur.humidity,
-        wind_kph: cur.wind_kph,
-        feelslike_c: cur.feelslike_c,
-        is_day: cur.is_day,
-        lat: loc.lat,
-        lon: loc.lon,
+        location: loc.name, region: loc.region, country: loc.country,
+        humidity: cur.humidity, wind_kph: cur.wind_kph,
+        feelslike_c: cur.feelslike_c, is_day: cur.is_day,
+        lat: loc.lat, lon: loc.lon,
+        vis_km: cur.vis_km, pressure_mb: cur.pressure_mb,
+        uv: cur.uv, wind_dir: cur.wind_dir, cloud: cur.cloud,
       });
       setLoading(false);
     } catch (err) {
@@ -121,205 +117,265 @@ function App() {
     }
   }, []);
 
-  /* ---- fetch 7-day forecast (Open-Meteo) ---- */
-  const fetchWeekly = useCallback(async () => {
-    if (current.lat == null) return;
-    setLoading(true);
+  /* ── fetch hourly + daily forecast (Open-Meteo) ── */
+  const fetchForecastData = useCallback(async (lat, lon) => {
     try {
-      const daily = await fetchForecast(current.lat, current.lon);
-      const days = daily.time.map((date, i) => ({
-        date,
-        max: daily.temperature_2m_max[i],
-        min: daily.temperature_2m_min[i],
-        code: daily.weathercode[i],
-        precip: daily.precipitation_sum[i],
-        wind: daily.windspeed_10m_max[i],
-      }));
-      setForecast(days);
-      setLoading(false);
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
-    }
-  }, [current.lat, current.lon]);
+      const data = await fetchForecast(lat, lon);
 
-  /* ---- initial load ---- */
+      // Hourly (next 18 hours)
+      if (data.hourly) {
+        const hrs = data.hourly.time.slice(0, 18).map((t, i) => ({
+          time: t,
+          temp: Math.round(data.hourly.temperature_2m[i]),
+          code: data.hourly.weathercode[i],
+        }));
+        setHourly(hrs);
+      }
+
+      // Daily (7 days)
+      if (data.daily) {
+        const days = data.daily.time.map((date, i) => ({
+          date,
+          max: Math.round(data.daily.temperature_2m_max[i]),
+          min: Math.round(data.daily.temperature_2m_min[i]),
+          code: data.daily.weathercode[i],
+        }));
+        setForecast(days);
+      }
+    } catch (err) {
+      console.error("Forecast error:", err);
+    }
+  }, []);
+
+  /* ── initial load ── */
   useEffect(() => {
     fetchCurrent("Kolkata");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ---- when user switches to week, pull forecast ---- */
+  /* ── when current loads, fetch forecast ── */
   useEffect(() => {
-    if (view === "week") fetchWeekly();
-  }, [view, fetchWeekly]);
+    if (current.lat != null) {
+      fetchForecastData(current.lat, current.lon);
+    }
+  }, [current.lat, current.lon, fetchForecastData]);
 
-  /* ---- search handler ---- */
+  /* ── search ── */
   const handleSearch = () => {
-    if (inputValue.trim()) {
-      setCity(inputValue.trim());
-      fetchCurrent(inputValue.trim());
-      setView("today");
+    const q = inputValue.trim();
+    if (q) {
+      setCity(q);
+      fetchCurrent(q);
     }
   };
 
-  /* ---- helpers ---- */
+  /* ── helpers ── */
   const dayName = (dateStr) => {
     const d = new Date(dateStr + "T00:00:00");
     const today = new Date();
     if (d.toDateString() === today.toDateString()) return "Today";
-    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return d.toLocaleDateString("en-US", { weekday: "short" });
   };
+
+  const hourLabel = (timeStr, index) => {
+    if (index === 0) return "Now";
+    const d = new Date(timeStr);
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  };
+
+  // Temperature range bar position for 7-day forecast
+  const allTemps = forecast.length > 0
+    ? { min: Math.min(...forecast.map(d => d.min)), max: Math.max(...forecast.map(d => d.max)) }
+    : { min: 0, max: 30 };
+  const tempRange = allTemps.max - allTemps.min || 1;
 
   /* ────────────── RENDER ────────────── */
   return (
-    <BackgroundWrapper condition={current.condition}>
-      {/* ---- Glass card container ---- */}
-      <Box className="app-container">
-        <Box className="glass-card">
-          {/* Title */}
-          <Typography className="app-title" variant="h4" component="h1">
-            {current.is_day ? <WbSunnyIcon className="title-icon" /> : <NightsStayIcon className="title-icon" />}
-            Sub-Zero
-          </Typography>
-          <Typography className="app-subtitle">Real-time weather at your fingertips</Typography>
+    <BackgroundWrapper condition={current.condition} isDay={current.is_day === 1}>
 
-          {/* Search */}
-          <Box className="search-row">
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="Search any city..."
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={handleSearch} size="small" sx={{ color: "rgba(255,255,255,0.7)" }}>
-                      <SearchIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-                sx: {
-                  color: "#fff",
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  borderRadius: "12px",
-                  "& fieldset": { border: "1px solid rgba(255,255,255,0.2)" },
-                  "&:hover fieldset": { borderColor: "rgba(255,255,255,0.4) !important" },
-                  "&.Mui-focused fieldset": { borderColor: "rgba(255,255,255,0.5) !important" },
-                  "& input::placeholder": { color: "rgba(255,255,255,0.5)" },
-                },
-              }}
-            />
-          </Box>
+      {/* ═══════ TOP HEADER BAR ═══════ */}
+      <header className="top-bar">
+        <div className="top-bar-brand">
+          <div className="brand-icon">
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>cloud</span>
+          </div>
+          <span className="brand-name">Aura</span>
+        </div>
 
-          {/* Toggle: Today / Week */}
-          <Box className="toggle-row">
-            <ToggleButtonGroup
-              value={view}
-              exclusive
-              onChange={(_, val) => { if (val) setView(val); }}
-              size="small"
-              sx={{
-                "& .MuiToggleButton-root": {
-                  color: "rgba(255,255,255,0.6)",
-                  borderColor: "rgba(255,255,255,0.2)",
-                  textTransform: "none",
-                  fontWeight: 600,
-                  px: 3,
-                  "&.Mui-selected": {
-                    color: "#fff",
-                    backgroundColor: "rgba(255,255,255,0.18)",
-                  },
-                },
-              }}
-            >
-              <ToggleButton value="today">Today</ToggleButton>
-              <ToggleButton value="week">7 Days</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
+        <div className="search-container">
+          <span className="material-symbols-outlined search-icon">search</span>
+          <input
+            className="search-input"
+            type="text"
+            placeholder="Search city..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+          />
+        </div>
 
-          {/* ---- TODAY VIEW ---- */}
-          {view === "today" && current.condition && (
-            <Box className="today-view">
-              <Box className="weather-icon-row">
-                <img className="condition-icon" src={current.conditionIcon} alt={current.condition} />
-                <Typography className="temp-text">
-                  {current.temp_c}°<span className="temp-unit">C</span>
-                </Typography>
-              </Box>
-              <Typography className="condition-label">{current.condition}</Typography>
+        <div className="top-bar-actions">
+          <button className="icon-btn" onClick={() => {
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => fetchCurrent(`${pos.coords.latitude},${pos.coords.longitude}`),
+                () => {}
+              );
+            }
+          }}>
+            <span className="material-symbols-outlined">my_location</span>
+          </button>
+        </div>
+      </header>
 
-              <Box className="details-grid">
-                <Box className="detail-chip">
-                  <ThermostatAutoIcon className="chip-icon" />
-                  <Box>
-                    <Typography className="chip-value">{current.feelslike_c}°C</Typography>
-                    <Typography className="chip-label">Feels Like</Typography>
-                  </Box>
-                </Box>
-                <Box className="detail-chip">
-                  <WaterDropIcon className="chip-icon" />
-                  <Box>
-                    <Typography className="chip-value">{current.humidity}%</Typography>
-                    <Typography className="chip-label">Humidity</Typography>
-                  </Box>
-                </Box>
-                <Box className="detail-chip">
-                  <AirIcon className="chip-icon" />
-                  <Box>
-                    <Typography className="chip-value">{current.wind_kph} km/h</Typography>
-                    <Typography className="chip-label">Wind</Typography>
-                  </Box>
-                </Box>
-              </Box>
+      {/* ═══════ MAIN CONTENT ═══════ */}
+      <main className="main-content">
 
-              <Box className="location-row">
-                <LocationOnIcon sx={{ fontSize: 18, opacity: 0.7 }} />
-                <Typography className="location-text">{current.location}</Typography>
-              </Box>
-            </Box>
-          )}
+        {/* ── HERO SECTION ── */}
+        <section className="hero-section">
+          <div className="hero-left">
+            <div className="hero-location">
+              <span className="material-symbols-outlined loc-pin" style={{ fontVariationSettings: "'FILL' 1" }}>location_on</span>
+              <span className="loc-text">{current.location}, {current.country}</span>
+            </div>
+            <h1 className="hero-temp">
+              {current.temp_c}<span className="hero-unit">°C</span>
+            </h1>
+            <p className="hero-condition">
+              {current.condition}
+              <span className="material-symbols-outlined hero-cond-icon" style={{ fontVariationSettings: "'FILL' 1" }}>
+                {conditionIcon(current.condition)}
+              </span>
+            </p>
+          </div>
+          <div className="hero-right">
+            <div className="glass-stats-card">
+              <div className="stat-item">
+                <p className="stat-label">Humidity</p>
+                <p className="stat-value">{current.humidity}%</p>
+              </div>
+              <div className="stat-divider" />
+              <div className="stat-item">
+                <p className="stat-label">UV Index</p>
+                <p className="stat-value">{current.uv}</p>
+              </div>
+              <div className="stat-divider" />
+              <div className="stat-item">
+                <p className="stat-label">Visibility</p>
+                <p className="stat-value">{current.vis_km} km</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-          {/* ---- WEEK VIEW ---- */}
-          {view === "week" && forecast.length > 0 && (
-            <Box className="week-view">
-              {forecast.map((day, i) => (
-                <Box key={i} className="forecast-row">
-                  <Typography className="forecast-day">{dayName(day.date)}</Typography>
-                  <Typography className="forecast-icon">{wmoIcon(day.code)}</Typography>
-                  <Typography className="forecast-desc">{wmoLabel(day.code)}</Typography>
-                  <Typography className="forecast-temps">
-                    <span className="hi">{Math.round(day.max)}°</span>
-                    <span className="lo">{Math.round(day.min)}°</span>
-                  </Typography>
-                </Box>
+        {/* ── BENTO GRID ── */}
+        <div className="bento-grid">
+
+          {/* HOURLY FORECAST (wide) */}
+          <section className="glass-card hourly-card">
+            <div className="card-header">
+              <h2 className="card-title">Hourly Forecast</h2>
+              <span className="card-badge">Next 18 Hours</span>
+            </div>
+            <div className="hourly-scroll">
+              {hourly.map((h, i) => (
+                <div key={i} className={`hour-chip ${i === 0 ? "hour-active" : ""}`}>
+                  <span className="hour-time">{hourLabel(h.time, i)}</span>
+                  <span className={`material-symbols-outlined hour-icon ${wmoIconColor(h.code)}`}
+                        style={{ fontVariationSettings: i === 0 ? "'FILL' 1" : "'FILL' 0" }}>
+                    {wmoMaterialIcon(h.code)}
+                  </span>
+                  <span className="hour-temp">{h.temp}°</span>
+                </div>
               ))}
-            </Box>
-          )}
-        </Box>
+            </div>
+            {/* Detail sub-cards */}
+            <div className="detail-sub-grid">
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">air</span> Wind
+                </div>
+                <p className="sub-card-value">{current.wind_kph} km/h</p>
+                <p className="sub-card-extra">{current.wind_dir}</p>
+              </div>
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">compress</span> Pressure
+                </div>
+                <p className="sub-card-value">{current.pressure_mb} hPa</p>
+                <p className="sub-card-extra">Stable</p>
+              </div>
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">thermostat</span> Feels Like
+                </div>
+                <p className="sub-card-value">{current.feelslike_c}°</p>
+                <p className="sub-card-extra">{current.feelslike_c > current.temp_c ? "Warmer" : "Cooler"}</p>
+              </div>
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">cloud</span> Cloud Cover
+                </div>
+                <p className="sub-card-value">{current.cloud}%</p>
+                <p className="sub-card-extra">{current.cloud > 70 ? "Overcast" : current.cloud > 30 ? "Partial" : "Clear"}</p>
+              </div>
+            </div>
+          </section>
 
-        {/* Footer */}
-        <Typography className="footer-text">
-          Powered by WeatherAPI &amp; Open-Meteo
-        </Typography>
-      </Box>
+          {/* 7-DAY FORECAST (narrow) */}
+          <section className="glass-card forecast-card">
+            <div className="card-header">
+              <h2 className="card-title">7-Day Forecast</h2>
+            </div>
+            <div className="forecast-list">
+              {forecast.map((day, i) => {
+                const leftPct = ((day.min - allTemps.min) / tempRange) * 100;
+                const widthPct = ((day.max - day.min) / tempRange) * 100;
+                return (
+                  <div key={i} className="forecast-row">
+                    <span className={`forecast-day ${i === 0 ? "forecast-day-today" : ""}`}>
+                      {dayName(day.date)}
+                    </span>
+                    <span className={`material-symbols-outlined forecast-icon ${wmoIconColor(day.code)}`}
+                          style={{ fontVariationSettings: "'FILL' 1" }}>
+                      {wmoMaterialIcon(day.code)}
+                    </span>
+                    <div className="forecast-temp-row">
+                      <span className="forecast-hi">{day.max}°</span>
+                      <div className="temp-bar-track">
+                        <div
+                          className="temp-bar-fill"
+                          style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 8)}%` }}
+                        />
+                      </div>
+                      <span className="forecast-lo">{day.min}°</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
 
-      {/* Loading overlay */}
-      <Backdrop sx={{ color: "#fff", zIndex: 9999 }} open={loading} onClick={() => setLoading(false)}>
-        <CircularProgress color="inherit" />
-      </Backdrop>
+        </div>
+      </main>
 
-      {/* Error dialog */}
-      <Dialog onClose={() => setErrorOpen(false)} open={errorOpen}>
-        <DialogContent>
-          Location <b>{city}</b> not found. Check for typos.
-        </DialogContent>
-        <DialogActions>
-          <Button variant="contained" onClick={() => setErrorOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      {/* ═══════ LOADING OVERLAY ═══════ */}
+      {loading && (
+        <div className="loading-overlay">
+          <div className="spinner" />
+        </div>
+      )}
+
+      {/* ═══════ ERROR DIALOG ═══════ */}
+      {errorOpen && (
+        <div className="error-backdrop" onClick={() => setErrorOpen(false)}>
+          <div className="error-dialog" onClick={(e) => e.stopPropagation()}>
+            <p>Location <strong>{city}</strong> not found. Check for typos.</p>
+            <button className="btn-primary" onClick={() => setErrorOpen(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
     </BackgroundWrapper>
   );
 }

@@ -1,4 +1,4 @@
-/* Global Reset & Base Styles */
+/* ── Global Reset & Base Styles for Aura Weather ── */
 *,
 *::before,
 *::after {
@@ -18,12 +18,14 @@ body {
     Oxygen, Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0f0c29;
+  background: #060e20;
+  color: #dee5ff;
 }
 
-/* Scrollbar styling (webkit) */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -31,10 +33,15 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(100, 116, 139, 0.2);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(100, 116, 139, 0.35);
+}
+
+/* Selection */
+::selection {
+  background: rgba(59, 191, 250, 0.3);
 }
