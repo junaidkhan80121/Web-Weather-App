@@ -14,19 +14,6 @@ async function fetchForecast(lat, lon) {
   return res.data;
 }
 
-/* WMO weather code → label */
-function wmoLabel(code) {
-  const map = {
-    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
-    45: "Fog", 48: "Rime fog",
-    51: "Light drizzle", 53: "Drizzle", 55: "Dense drizzle",
-    61: "Slight rain", 63: "Rain", 65: "Heavy rain",
-    71: "Slight snow", 73: "Snow", 75: "Heavy snow",
-    80: "Rain showers", 81: "Showers", 82: "Heavy showers",
-    95: "Thunderstorm", 96: "Thunderstorm + hail", 99: "Severe storm",
-  };
-  return map[code] || "Unknown";
-}
 
 /* WMO code → Material Symbol icon name */
 function wmoMaterialIcon(code) {
