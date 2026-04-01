@@ -138,19 +138,21 @@ export default function BackgroundWrapper({ condition, isDay = true, children })
   };
 
   return (
-    <div className="weather-bg">
-      {/* Background image */}
-      <div className={`weather-bg-image bg-${theme}`} />
-      {/* Overlay */}
-      <div className={`weather-bg-overlay overlay-${theme}`} />
-      {/* Particles */}
-      <div className="weather-bg-particles">
-        {particles[theme]}
+    <>
+      <div className="weather-bg">
+        {/* Background image */}
+        <div className={`weather-bg-image bg-${theme}`} />
+        {/* Overlay */}
+        <div className={`weather-bg-overlay overlay-${theme}`} />
+        {/* Particles */}
+        <div className="weather-bg-particles">
+          {particles[theme]}
+        </div>
       </div>
       {/* Content */}
       <div className="weather-bg-content">
         {children}
       </div>
-    </div>
+    </>
   );
 }

@@ -71,6 +71,8 @@ function App() {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(true);
   const [errorOpen, setErrorOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [current, setCurrent] = useState({
     temp_c: "--", temp_f: "--", condition: "", location: "",
@@ -160,6 +162,33 @@ function App() {
     }
   }, [current.lat, current.lon, fetchForecastData]);
 
+  /* ── autocomplete search ── */
+  useEffect(() => {
+    const q = inputValue.trim();
+    if (q.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await axios.get(
+          "https://weatherapi-com.p.rapidapi.com/search.json",
+          {
+            params: { q },
+            headers: {
+              "X-RapidAPI-Key": process.env.REACT_APP_RAPIDAPI_KEY,
+              "X-RapidAPI-Host": "weatherapi-com.p.rapidapi.com",
+            },
+          }
+        );
+        setSuggestions(data);
+      } catch (err) {
+        console.error("Autocomplete error:", err);
+      }
+    }, 400); // 400ms debounce
+    return () => clearTimeout(timer);
+  }, [inputValue]);
+
   /* ── search ── */
   const handleSearch = () => {
     const q = inputValue.trim();
@@ -209,9 +238,41 @@ function App() {
             type="text"
             placeholder="Search city..."
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setShowSuggestions(false);
+                handleSearch();
+              }
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="search-dropdown">
+              {suggestions.map((s) => (
+                <li
+                  key={s.id}
+                  className="search-dropdown-item"
+                  onClick={() => {
+                    setInputValue(s.name);
+                    setCity(s.name);
+                    fetchCurrent(s.name);
+                    setShowSuggestions(false);
+                  }}
+                >
+                  <span className="material-symbols-outlined item-icon" style={{ fontVariationSettings: "'FILL' 1" }}>location_on</span>
+                  <div className="item-text">
+                    <span className="item-city">{s.name}</span>
+                    <span className="item-region">{s.region ? `${s.region}, ` : ''}{s.country}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="top-bar-actions">
