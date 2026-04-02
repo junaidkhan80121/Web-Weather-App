@@ -60,6 +60,7 @@ function App() {
   const [errorOpen, setErrorOpen] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [audioMuted, setAudioMuted] = useState(true);
 
   const [current, setCurrent] = useState({
     temp_c: "--", temp_f: "--", condition: "", location: "",
@@ -205,9 +206,46 @@ function App() {
     : { min: 0, max: 30 };
   const tempRange = allTemps.max - allTemps.min || 1;
 
+  /* ── ambient audio mapping ── */
+  const getAudioSettings = (text) => {
+    if (!text) return { url: null, volume: 1.0 };
+    const c = text.toLowerCase();
+    
+    // Base Google Action Sounds
+    const RAIN_SND = "https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg";
+    const WIND_SND = "https://actions.google.com/sounds/v1/weather/wind.ogg";
+    const THUNDER_SND = "https://actions.google.com/sounds/v1/weather/distant_thunder.ogg";
+
+    // 1. Thunderstorms
+    if (c.includes('thunder') || c.includes('storm')) {
+      return { url: THUNDER_SND, volume: 1.0 };
+    }
+    // 2. Heavy Rain
+    if (c.includes('heavy') || c.includes('torrential')) {
+      return { url: RAIN_SND, volume: 1.0 };
+    }
+    // 3. Light rain / Drizzle
+    if (c.includes('rain') || c.includes('drizzle') || c.includes('shower')) {
+      return { url: RAIN_SND, volume: 0.3 };
+    }
+    // 4. Snow / Blizzard
+    if (c.includes('snow') || c.includes('blizzard') || c.includes('ice')) {
+      return { url: WIND_SND, volume: 0.7 };
+    }
+    // 5. Fog / Mist 
+    if (c.includes('fog') || c.includes('mist') || c.includes('haze')) {
+      return { url: WIND_SND, volume: 0.4 };
+    }
+    // 6. Sunny / Clear / Cloudy (soft ambient breeze)
+    return { url: WIND_SND, volume: 0.15 }; 
+  };
+  
+  const audioSettings = getAudioSettings(current.condition);
+
   /* ────────────── RENDER ────────────── */
   return (
-    <BackgroundWrapper condition={current.condition} isDay={current.is_day === 1}>
+    <>
+      <BackgroundWrapper condition={current.condition} isDay={current.is_day === 1}>
 
       {/* ═══════ TOP HEADER BAR ═══════ */}
       <header className="top-bar">
@@ -263,6 +301,14 @@ function App() {
         </div>
 
         <div className="top-bar-actions">
+          {audioSettings.url && (
+            <button className="icon-btn" onClick={() => setAudioMuted(!audioMuted)}>
+              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+                {audioMuted ? "volume_off" : "volume_up"}
+              </span>
+            </button>
+          )}
+
           <button className="icon-btn" onClick={() => {
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
@@ -425,6 +471,21 @@ function App() {
       )}
 
     </BackgroundWrapper>
+      {/* ═══════ AMBIENT AUDIO ═══════ */}
+      {audioSettings.url && (
+        <audio 
+          src={audioSettings.url} 
+          autoPlay 
+          loop 
+          muted={audioMuted} 
+          ref={(audio) => {
+            if (audio) {
+              audio.volume = audioSettings.volume;
+            }
+          }}
+        />
+      )}
+    </>
   );
 }
 
