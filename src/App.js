@@ -60,7 +60,7 @@ function App() {
   const [errorOpen, setErrorOpen] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [audioMuted, setAudioMuted] = useState(true);
+  const [audioMuted, setAudioMuted] = useState(false);
 
   const [current, setCurrent] = useState({
     temp_c: "--", temp_f: "--", condition: "", location: "",
