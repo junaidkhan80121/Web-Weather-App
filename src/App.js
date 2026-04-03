@@ -15,6 +15,26 @@ async function fetchForecast(lat, lon) {
 }
 
 
+/* Open-Meteo Air Quality API (free, no key) */
+async function fetchAQI(lat, lon) {
+  const url =
+    `https://air-quality-api.open-meteo.com/v1/air-quality` +
+    `?latitude=${lat}&longitude=${lon}` +
+    `&current=us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,sulphur_dioxide` +
+    `&timezone=auto`;
+  const res = await axios.get(url);
+  return res.data;
+}
+
+function aqiLabel(aqi) {
+  if (aqi <= 50) return { label: "Good", class: "aqi-good" };
+  if (aqi <= 100) return { label: "Moderate", class: "aqi-moderate" };
+  if (aqi <= 150) return { label: "Unhealthy for Sensitive", class: "aqi-sensitive" };
+  if (aqi <= 200) return { label: "Unhealthy", class: "aqi-unhealthy" };
+  if (aqi <= 300) return { label: "Very Unhealthy", class: "aqi-very-bad" };
+  return { label: "Hazardous", class: "aqi-hazardous" };
+}
+
 /* WMO code → Material Symbol icon name */
 function wmoMaterialIcon(code) {
   if ([0, 1].includes(code)) return "wb_sunny";
@@ -68,7 +88,10 @@ function App() {
     feelslike_c: "--", is_day: 1, lat: null, lon: null,
     vis_km: "--", pressure_mb: "--", uv: "--",
     wind_dir: "", cloud: "--",
+    gust_kph: "--", precip_mm: "--", dewpoint_c: "--", vis_miles: "--",
   });
+
+  const [aqi, setAqi] = useState({ aqi: "--", pm25: "--", pm10: "--", o3: "--", no2: "--", so2: "--" });
 
   const [hourly, setHourly] = useState([]);
   const [forecast, setForecast] = useState([]);
@@ -98,6 +121,10 @@ function App() {
         lat: loc.lat, lon: loc.lon,
         vis_km: cur.vis_km, pressure_mb: cur.pressure_mb,
         uv: cur.uv, wind_dir: cur.wind_dir, cloud: cur.cloud,
+        gust_kph: cur.gust_kph || cur.wind_kph,
+        precip_mm: cur.precip_mm || "0",
+        dewpoint_c: cur.dewpoint_c || "--",
+        vis_miles: cur.vis_miles || "--",
       });
       setLoading(false);
     } catch (err) {
@@ -112,9 +139,9 @@ function App() {
     try {
       const data = await fetchForecast(lat, lon);
 
-      // Hourly (next 18 hours)
+      // Hourly (next 24 hours)
       if (data.hourly) {
-        const hrs = data.hourly.time.slice(0, 18).map((t, i) => ({
+        const hrs = data.hourly.time.slice(0, 24).map((t, i) => ({
           time: t,
           temp: Math.round(data.hourly.temperature_2m[i]),
           code: data.hourly.weathercode[i],
@@ -122,9 +149,9 @@ function App() {
         setHourly(hrs);
       }
 
-      // Daily (7 days)
+      // Daily (10 days)
       if (data.daily) {
-        const days = data.daily.time.map((date, i) => ({
+        const days = data.daily.time.slice(0, 10).map((date, i) => ({
           date,
           max: Math.round(data.daily.temperature_2m_max[i]),
           min: Math.round(data.daily.temperature_2m_min[i]),
@@ -137,18 +164,38 @@ function App() {
     }
   }, []);
 
+  /* ── fetch Air Quality (Open-Meteo) ── */
+  const fetchAqiData = useCallback(async (lat, lon) => {
+    try {
+      const data = await fetchAQI(lat, lon);
+      if (data.current) {
+        setAqi({
+          aqi: data.current.us_aqi || "--",
+          pm25: data.current.pm2_5 || "--",
+          pm10: data.current.pm10 || "--",
+          o3: data.current.ozone || "--",
+          no2: data.current.nitrogen_dioxide || "--",
+          so2: data.current.sulphur_dioxide || "--",
+        });
+      }
+    } catch (err) {
+      console.error("AQI error:", err);
+    }
+  }, []);
+
   /* ── initial load ── */
   useEffect(() => {
     fetchCurrent("Kolkata");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── when current loads, fetch forecast ── */
+  /* ── when current loads, fetch forecast + AQI ── */
   useEffect(() => {
     if (current.lat != null) {
       fetchForecastData(current.lat, current.lon);
+      fetchAqiData(current.lat, current.lon);
     }
-  }, [current.lat, current.lon, fetchForecastData]);
+  }, [current.lat, current.lon, fetchForecastData, fetchAqiData]);
 
   /* ── autocomplete search ── */
   useEffect(() => {
@@ -369,7 +416,7 @@ function App() {
           <section className="glass-card hourly-card">
             <div className="card-header">
               <h2 className="card-title">Hourly Forecast</h2>
-              <span className="card-badge">Next 18 Hours</span>
+              <span className="card-badge">Next 24 Hours</span>
             </div>
             <div className="hourly-scroll">
               {hourly.map((h, i) => (
@@ -412,6 +459,68 @@ function App() {
                 </div>
                 <p className="sub-card-value">{current.cloud}%</p>
                 <p className="sub-card-extra">{current.cloud > 70 ? "Overcast" : current.cloud > 30 ? "Partial" : "Clear"}</p>
+              </div>
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">air</span> Gusts
+                </div>
+                <p className="sub-card-value">{current.gust_kph} km/h</p>
+                <p className="sub-card-extra">{Number(current.gust_kph) > Number(current.wind_kph) ? "Stronger than wind" : "Calm"}</p>
+              </div>
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">water_drop</span> Precip
+                </div>
+                <p className="sub-card-value">{current.precip_mm} mm</p>
+                <p className="sub-card-extra">{Number(current.precip_mm) > 0 ? "Rain expected" : "No rain"}</p>
+              </div>
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">dew_point</span> Dew Point
+                </div>
+                <p className="sub-card-value">{current.dewpoint_c}°</p>
+                <p className="sub-card-extra">{Number(current.dewpoint_c) > 20 ? "Humid" : "Comfortable"}</p>
+              </div>
+              <div className="detail-sub-card">
+                <div className="sub-card-label">
+                  <span className="material-symbols-outlined">visibility</span> Visibility
+                </div>
+                <p className="sub-card-value">{current.vis_miles} mi</p>
+                <p className="sub-card-extra">{Number(current.vis_miles) > 6 ? "Clear" : Number(current.vis_miles) > 3 ? "Moderate" : "Poor"}</p>
+              </div>
+            </div>
+
+            {/* AQI Card */}
+            <div className="aqi-card">
+              <div className="card-header">
+                <h2 className="card-title">Air Quality</h2>
+                <span className={`card-badge ${aqiLabel(aqi.aqi).class}`}>{aqiLabel(aqi.aqi).label}</span>
+              </div>
+              <div className="aqi-main">
+                <div className="aqi-value">{aqi.aqi}</div>
+                <div className="aqi-label">US AQI</div>
+              </div>
+              <div className="aqi-details">
+                <div className="aqi-detail">
+                  <span className="aqi-detail-label">PM2.5</span>
+                  <span className="aqi-detail-value">{aqi.pm25} µg/m³</span>
+                </div>
+                <div className="aqi-detail">
+                  <span className="aqi-detail-label">PM10</span>
+                  <span className="aqi-detail-value">{aqi.pm10} µg/m³</span>
+                </div>
+                <div className="aqi-detail">
+                  <span className="aqi-detail-label">O₃</span>
+                  <span className="aqi-detail-value">{aqi.o3} µg/m³</span>
+                </div>
+                <div className="aqi-detail">
+                  <span className="aqi-detail-label">NO₂</span>
+                  <span className="aqi-detail-value">{aqi.no2} µg/m³</span>
+                </div>
+                <div className="aqi-detail">
+                  <span className="aqi-detail-label">SO₂</span>
+                  <span className="aqi-detail-value">{aqi.so2} µg/m³</span>
+                </div>
               </div>
             </div>
           </section>
